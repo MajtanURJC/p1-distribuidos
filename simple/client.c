@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <signal.h>
 
+int end = 1;
 
 int start_receiving (int conn_sock, ssize_t size, char buffer[]) {
 
@@ -28,13 +29,7 @@ int start_sending (int conn_sock, char buffer[], ssize_t size) {
 }
 
 void signal_control (int out_signal) {
-
-    int exit_res = close (sockfd);
-    if (exit_res < 1) {
-        perror ("Exit with errors\n");
-        exit(1);
-    }
-    printf("Exited by Ctrl+C\n");
+    end = 1; 
 }
 
 int main (int argc, char* argv[]) {
@@ -80,6 +75,16 @@ int main (int argc, char* argv[]) {
         if (conv_res < 0) {
             perror ("Error on sending");
             exit(1);
+        }
+
+        while(end == 0) {
+            int exit_res = close (sockfd);
+            if (exit_res < 1) {
+                perror ("Exit with errors\n");
+                exit(1);
+            }
+            exit(0);
+            printf("Exited by Ctrl+C\n");
         }
     }
 }
