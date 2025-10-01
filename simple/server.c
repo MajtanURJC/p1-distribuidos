@@ -1,81 +1,103 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <signal.h>
+
 #define PORT 8080
 
+int start_receiving (int conn_sock, ssize_t size, char buffer[]) {
 
-int start_listening (int sockfd, int start) {
-    if(start = 0) {
-        int listen_res;
-    }
-    listen_res = listen(sockfd,1);
-    if (listen_res < 0) return -1;
-    if(start == 0) {
-        printf("Esperando conexión...\n");
-        start = 1;
-        struct sockaddr_in client_addr;
-        socklen_t addrlen = sizeof(client_addr);
-        int new_sock = accept(sockfd, (struct sockaddr *)&client_addr, &addrlen);
-        if (new_sock < 0) {
-            return -3;
-        }
-    }
-    start_talking()
-    return -2;
+    size = recv (conn_sock,buffer, sizeof(buffer), 0);
+    if (size < 0 ) 
+        return -1;
+    buffer[size] = '\0';  
+    printf ("> %s\n", buffer);
+    return 0;
 }
 
-void start_talking ()
+int start_sending (int conn_sock, char buffer[], ssize_t size) {
 
+    memset (buffer, 0, sizeof(buffer));
+    fgets (buffer, sizeof(buffer), stdin);
+    size = send (conn_sock,buffer,sizeof(buffer),0);
+    if (size < 0) 
+        return -1;
+    return 0;
+}
+
+void signal_control (int out_signal) {
+
+    int exit_res = close (sockfd);
+    if (exit_res < 1) {
+        perror ("Exit with errors\n");
+        exit(1);
+    }
+    printf("Exited by Ctrl+C\n");
+}
 
 int main (int argc, char* argv[]) {
-    
+
+    signal (SIGINT, signal_control);
     int sockfd;
-    int exit_res;
     int bind_res;
-    int state;
-    int conv_res = 1;
-    int start = 0;
+    int listen_res;
+    int conn_sock;
+    int conv_res;
+    char buffer[1024];
+    ssize_t size;
+    
     struct sockaddr_in sock;
     sock.sin_family = AF_INET;
     sock.sin_addr.s_addr = INADDR_ANY;
     sock.sin_port = htons(PORT);
 
+    struct sockaddr out_sock;
 
-    sockfd = socket(sock.sin_family,SOCK_STREAM,0);
+    sockfd = socket (sock.sin_family,SOCK_STREAM,0);
 
     if (sockfd < 0) {
-        perror("Error creating the socket\n");
+        perror ("Error creating the socket\n");
         exit(1);
     } 
-    printf("Socket successfully created...\n");
+    printf ("Socket successfully created...\n");
 
-    bind_res = bind(sockfd, (struct sockaddr *) &sock1, sizeof(sock1));
+    bind_res = bind(sockfd, (struct sockaddr *) &sock, sizeof(sock));
     if (bind_res < 0) {
         perror("Error on bind\n");
         close(sockfd);
         exit(1);
     }
 
-    printf("Server successfully binded...\n")
+    printf("Server successfully binded...\n");
 
-    conv_res = start_listening(sockfd, start);
-    if(conv_res == -1) {
-        perror("Listen error\n");
-        exit(1);
-    } else if (conv_res == -2) {
-        perror("Talk error\n");
-        exit(1);
-    } else if (conv_res == -3) {
-        perror("Error on accept\n");
+    listen_res = listen (sockfd,1);
+    if (listen_res < 0) {
+        perror ("Error on listen");
         exit(1);
     }
+    printf("Server listening...\n");
+
+    conn_sock = accept (sockfd, (struct sockaddr *) &out_sock,sizeof(out_sock));
+    if(conn_sock < 0){
+        perror ("Error on accept");
+        exit(1);
+    }
+
+    while (1) {
+        conv_res = start_receiving (conn_sock, size,buffer);
+        if (conv_res < 0) {
+            perror ("Error on receiving");
+            exit(1);
+        }
+        conv_res = start_sending (conn_sock, buffer,size);
+        if (conv_res < 0) {
+            perror ("Error on sending");
+            exit(1);
+        }
+    }
+
     
-
-    exit_res = close(sockfd);
-    if(exit_res < 1) {
-        perror("Exit unssuccessfully\n");
-        exit(1);
-    }
 }
