@@ -7,31 +7,38 @@
 #include <signal.h>
 
 #define PORT 8080
+#define BUF_SIZE 1024
 
-int end = 1;
+int conn_sock = -1;
 
 int start_receiving (int conn_sock, ssize_t size, char buffer[]) {
 
-    size = recv (conn_sock,buffer, sizeof(buffer), 0);
+    size = recv(conn_sock, buffer, BUF_SIZE - 1, 0);
     if (size < 0 ) 
         return -1;
     buffer[size] = '\0';  
-    printf ("> %s\n", buffer);
+    printf ("+++ %s", buffer);
     return 0;
 }
 
 int start_sending (int conn_sock, char buffer[], ssize_t size) {
-
-    memset (buffer, 0, sizeof(buffer));
-    fgets (buffer, sizeof(buffer), stdin);
-    size = send (conn_sock,buffer,sizeof(buffer),0);
+    
+    memset(buffer, 0, BUF_SIZE);
+    printf("> ");
+    fgets(buffer, BUF_SIZE, stdin);
+    size = send (conn_sock,buffer,strlen(buffer),0);
     if (size < 0) 
         return -1;
     return 0;
 }
 
 void signal_control (int out_signal) {
-    end = 1;
+    if (conn_sock != -1) {
+        close(conn_sock);    
+        conn_sock = -1;
+    }
+    printf("\nServidor detenido con Ctrl+C\n");
+    exit(0);
 }
 
 int main (int argc, char* argv[]) {
@@ -40,10 +47,9 @@ int main (int argc, char* argv[]) {
     int sockfd;
     int bind_res;
     int listen_res;
-    int conn_sock;
     int conv_res;
-    char buffer[1024];
-    ssize_t size;
+    char buffer[BUF_SIZE];
+    ssize_t size = 0;
     
     struct sockaddr_in sock;
     sock.sin_family = AF_INET;
@@ -76,7 +82,9 @@ int main (int argc, char* argv[]) {
     }
     printf("Server listening...\n");
 
-    conn_sock = accept (sockfd, (struct sockaddr *) &out_sock,sizeof(out_sock));
+    socklen_t addrlen = sizeof(out_sock);
+    conn_sock = accept(sockfd, (struct sockaddr *) &out_sock, &addrlen);
+    close(sockfd);
     if(conn_sock < 0){
         perror ("Error on accept");
         exit(1);
@@ -93,18 +101,6 @@ int main (int argc, char* argv[]) {
         if (conv_res < 0) {
             perror ("Error on sending");
             exit(1);
-        }
-
-        while(end == 0) {
-            int exit_res = close (sockfd);
-            if (exit_res < 1) {
-                perror ("Exit with errors\n");
-                exit(1);
-            }
-            exit(0);
-            printf("Exited by Ctrl+C\n");
-        }
+        }          
     }
-
-    
 }
