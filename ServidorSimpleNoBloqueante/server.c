@@ -4,13 +4,13 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <sys/select.h>
 #include <signal.h>
 
 #define PORT 8080
 #define BUF_SIZE 1024
 
 int end = 0;
-
 
 void signal_control (int out_signal) {
     end = 1;
@@ -23,6 +23,7 @@ int main (int argc, char* argv[]) {
     int bind_res;
     int listen_res;
     int conn_sock;
+    int selected;
     char buffer[BUF_SIZE];
     ssize_t size = 0;
     
@@ -67,29 +68,44 @@ int main (int argc, char* argv[]) {
 
     while (1) {
 
-        sleep(1);
-        size = recv(conn_sock, buffer, BUF_SIZE - 1, SOCK_NONBLOCK);
-        if (size < 0) {
-            perror ("Error on receiving");
-            close(conn_sock);
+        fd_set readfds;
+        struct timeval timeout;
+
+        FD_ZERO(&readfds);
+        FD_SET(conn_sock, &readfds);
+
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 500000;
+
+        selected = select(conn_sock + 1, &readfds, NULL, NULL, &timeout);
+        if (selected < 0) {
+            perror("select error");
+            close(sockfd);
             exit(1);
         }
-        
 
-        if (size != 0) { 
-            buffer[size] = '\0'; 
-            printf ("+++ %s", buffer);
-            memset(buffer, 0, BUF_SIZE);
+        if (selected > 0 && FD_ISSET(conn_sock, &readfds)) {
+            size = recv(conn_sock, buffer, BUF_SIZE - 1, 0);
+            if (size < 0) {
+                perror("Error on receiving");
+                close(conn_sock);
+                exit(1);
+            } else if (size == 0) {  // servidor cerró la conexión
+                printf("Servidor cerró la conexión.\n");
+                break;
+            }
+
+            buffer[size] = '\0';
+            printf("+++ %s\n", buffer);
         }
 
         if(end == 1) {
             break;
         }
 
-        
         printf("> ");
         fgets(buffer, BUF_SIZE, stdin);
-        size = send(conn_sock,buffer,strlen(buffer),0);
+        size = send(conn_sock, buffer, strlen(buffer), 0);
         if (size < 0) {
             perror("Error on send");
             close(conn_sock);
@@ -104,5 +120,4 @@ int main (int argc, char* argv[]) {
     close(conn_sock);    
     printf("\nServidor detenido con Ctrl+C\n");
     exit(0);
-
 }
