@@ -11,27 +11,29 @@
 int main (int argc, char* argv[]) {
 
     if(argc != 4) {
-        perror("Se requieren tres parametros");
+        perror("Wrong number of arguments");
         exit(1);
     }
 
     ssize_t size = -1;
     int sockfd;
     struct sockaddr_in sock;
-    char buffer[BUF_SIZE]; 
+    char buffer[BUF_SIZE];
+    setbuf(stdout, NULL);
+
 
     char *endptr;
     long valor = strtol(argv[3], &endptr, 10);
     if (*endptr != '\0') {
-        fprintf(stderr, "Puerto inválido: %s\n", argv[3]);
+        fprintf(stderr, "Invalid port: %s\n", argv[3]);
         exit(1);
     }
 
-    unsigned short puerto_host = (unsigned short) valor;
+    unsigned short host_port = (unsigned short) valor;
 
     sock.sin_family = AF_INET;
     sock.sin_addr.s_addr = inet_addr(argv[2]);  
-    sock.sin_port = htons(puerto_host);
+    sock.sin_port = htons(host_port);
 
     sockfd = socket(sock.sin_family, SOCK_STREAM, 0);
 
@@ -40,7 +42,6 @@ int main (int argc, char* argv[]) {
         exit(1);
     } 
 
-    printf("Socket successfully created...\n");
 
     if (connect(sockfd, (struct sockaddr *) &sock, sizeof(sock)) < 0) {
         perror("Error on connect");

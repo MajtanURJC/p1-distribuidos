@@ -19,6 +19,7 @@ void signal_control (int out_signal) {
 int main (int argc, char* argv[]) {
 
     signal (SIGINT, signal_control);
+    setbuf(stdout, NULL);
     int sockfd;
     int bind_res;
     int listen_res;
@@ -95,7 +96,7 @@ int main (int argc, char* argv[]) {
     }
 
     close(conn_sock);    
-    printf("\nServidor detenido con Ctrl+C\n");
+    printf("\nServer stopped with Ctrl+C\n");
     exit(0);
 
 }

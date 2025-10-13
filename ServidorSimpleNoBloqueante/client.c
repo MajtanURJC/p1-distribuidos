@@ -19,6 +19,7 @@ void signal_control (int out_signal) {
 int main (int argc, char* argv[]) {
 
     signal(SIGINT, signal_control); 
+    setbuf(stdout, NULL);
     char buffer[1024];
     ssize_t size = 0;
     int sockfd;
@@ -49,7 +50,7 @@ int main (int argc, char* argv[]) {
     while (1) {
     printf("> ");
     if (fgets(buffer, BUF_SIZE, stdin) == NULL) {
-        perror("Error leyendo stdin");
+        perror("Error reading stdin");
         break;
     }
 
@@ -86,7 +87,7 @@ int main (int argc, char* argv[]) {
             perror("Error on receiving");
             close(sockfd);
             exit(1);
-        } else if (size == 0) {  // servidor cerró la conexión
+        } else if (size == 0) {
             printf("Servidor cerró la conexión.\n");
             break;
         }
@@ -102,7 +103,7 @@ int main (int argc, char* argv[]) {
 
    
     close(sockfd);    
-    printf("\nServidor detenido con Ctrl+C\n");
+    printf("\nServer stopped with Ctrl+C\n");
     exit(0);   
 
  }

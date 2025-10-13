@@ -6,12 +6,14 @@
 #include <sys/socket.h>
 #include <signal.h>
 #include <pthread.h>
+#include <time.h>
 
 #define BUF_SIZE 1024
-#define MAX_CLIENTES 100
+#define MAX_CLIENTS 100
 
 int end = 0;
 int num_threads = 0;
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 // Función para manejar Ctrl+C
 void signal_control(int out_signal) {
@@ -33,6 +35,15 @@ void* thread_client(void* arg) {
     printf("+++ %s", buffer);
 
 
+    double min = 0.5;
+    double max = 2.0;
+
+    pthread_mutex_lock(&lock);
+    double numero = min + (rand() / (double)RAND_MAX) * (max - min);
+    pthread_mutex_unlock(&lock);
+
+    usleep((int)(numero * 1000000));
+
     memset(buffer, 0, BUF_SIZE);
     const char* respuesta = "Hello Client !!!\n";
     size = send(conn_sock, respuesta, strlen(respuesta), 0);
@@ -41,13 +52,13 @@ void* thread_client(void* arg) {
     }
 
     close(conn_sock);
-    num_threads--;
+    free(arg);
     return NULL;
 }
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {
-        perror("Necesita un argumento");
+        fprintf(stderr, "Wrong number of arguments");
         exit(1);
     }
 
@@ -55,12 +66,15 @@ int main(int argc, char* argv[]) {
     sock.sin_family = AF_INET;
 
     signal(SIGINT, signal_control);
+    setbuf(stdout, NULL);
 
     int sockfd;
     int bind_res;
     int listen_res;
     struct sockaddr_in client_addr;
-    pthread_t threads[MAX_CLIENTES];
+    pthread_t threads[MAX_CLIENTS];
+
+
     
 
     // Convertir el argumento a unsigned uint
@@ -71,10 +85,10 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
-    unsigned short puerto_host = (unsigned short) valor;
+    unsigned short host_port = (unsigned short) valor;
 
     sock.sin_addr.s_addr = INADDR_ANY;
-    sock.sin_port = htons(puerto_host);
+    sock.sin_port = htons(host_port);
 
 
     sockfd = socket(sock.sin_family, SOCK_STREAM, 0);
@@ -99,7 +113,7 @@ int main(int argc, char* argv[]) {
     printf("Socket successfully binded...\n");
 
 
-    listen_res = listen(sockfd, MAX_CLIENTES);
+    listen_res = listen(sockfd, MAX_CLIENTS);
     if (listen_res < 0) {
         perror("Error en listen");
         close(sockfd);
@@ -114,9 +128,13 @@ int main(int argc, char* argv[]) {
 
 
     while (end == 0) {
-        if (num_threads >= MAX_CLIENTES) {
-            break;
+        if (num_threads >= MAX_CLIENTS) {
+            for (int i = 0; i < num_threads; i++) {
+                pthread_join(threads[i], NULL);
+            }
+            num_threads = 0;
         }
+        
 
         int *conn_sock = malloc(sizeof(int));
         *conn_sock = accept(sockfd, (struct sockaddr*)&client_addr, &addrlen);
@@ -141,10 +159,6 @@ int main(int argc, char* argv[]) {
 
     close(sockfd);
 
-    for (int i = 0; i < num_threads; i++) {
-        pthread_join(threads[i], NULL);
-    }
-
-    printf("\nServidor detenido con Ctrl+C\n");
+    printf("\nServer stopped with Ctrl+C\n");
     return 0;
 }
