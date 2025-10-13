@@ -5,118 +5,146 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <signal.h>
+#include <pthread.h>
 
-#define PORT 8080
 #define BUF_SIZE 1024
+#define MAX_CLIENTES 100
 
 int end = 0;
+int num_threads = 0;
 
-int start_receiving (int conn_sock, ssize_t size, char buffer[]) {
-
-    size = recv(conn_sock, buffer, BUF_SIZE - 1, 0);
-    if (size < 0 ) 
-        return -1;
-    buffer[size] = '\0';  
-    printf ("+++ %s", buffer);
-    return 0;
-}
-
-int start_sending (int conn_sock, char buffer[], ssize_t size) {
-    
-    memset(buffer, 0, BUF_SIZE);
-    printf("> ");
-    fgets(buffer, BUF_SIZE, stdin);
-    size = send (conn_sock,buffer,strlen(buffer),0);
-    if (size < 0) 
-        return -1;
-    return 0;
-}
-
-void signal_control (int out_signal) {
+// Función para manejar Ctrl+C
+void signal_control(int out_signal) {
     end = 1;
 }
 
-int main (int argc, char* argv[]) {
+void* thread_client(void* arg) {
+    int conn_sock = *(int*)arg;
+    char buffer[BUF_SIZE];
+    ssize_t size;
 
-    argc ++;
-    argv --;
+    
+
+    size = recv(conn_sock, buffer, BUF_SIZE - 1, 0);
+    if (size < 0) {
+        perror("Error on recv");
+    }
+    buffer[size] = '\0';
+    printf("+++ %s", buffer);
+
+
+    memset(buffer, 0, BUF_SIZE);
+    const char* respuesta = "Hello Client !!!\n";
+    size = send(conn_sock, respuesta, strlen(respuesta), 0);
+    if (size < 0) {
+        perror("Error on send");
+    }
+
+    close(conn_sock);
+    num_threads--;
+    return NULL;
+}
+
+int main(int argc, char* argv[]) {
+    if (argc != 2) {
+        perror("Necesita un argumento");
+        exit(1);
+    }
 
     struct sockaddr_in sock;
     sock.sin_family = AF_INET;
 
-    if (argc == 1) {
-        int n_clients = argv[0]; 
-    } else if (argc == 2 ) {
+    signal(SIGINT, signal_control);
 
-    } else {
-        sock.sin_addr.s_addr = argv[0];
-        sock.sin_port = argv[1];
-    }
-
-    signal (SIGINT, signal_control);
     int sockfd;
     int bind_res;
     int listen_res;
-    int conv_res;
-    int conn_sock;
-    char buffer[BUF_SIZE];
-    ssize_t size = 0;
+    struct sockaddr_in client_addr;
+    pthread_t threads[MAX_CLIENTES];
     
-    
-    sock.sin_family = AF_INET;
-    sock.sin_addr.s_addr = INADDR_ANY;
-    sock.sin_port = htons(PORT);
 
-    struct sockaddr out_sock;
-
-    sockfd = socket (sock.sin_family,SOCK_STREAM,0);
-
-    if (sockfd < 0) {
-        perror ("Error creating the socket\n");
+    // Convertir el argumento a unsigned uint
+    char *endptr;
+    long valor = strtol(argv[1], &endptr, 10);
+    if (*endptr != '\0') {
+        fprintf(stderr, "Invalid Port: %s\n", argv[1]);
         exit(1);
-    } 
-    printf ("Socket successfully created...\n");
+    }
 
-    bind_res = bind(sockfd, (struct sockaddr *) &sock, sizeof(sock));
+    unsigned short puerto_host = (unsigned short) valor;
+
+    sock.sin_addr.s_addr = INADDR_ANY;
+    sock.sin_port = htons(puerto_host);
+
+
+    sockfd = socket(sock.sin_family, SOCK_STREAM, 0);
+    if (sockfd < 0) {
+        perror("Error creating socket");
+        exit(1);
+    }
+    printf("Socket successfully created...\n");
+
+    int opt = 1;
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+        perror("setsockopt(SO_REUSEADDR) failed");
+    }
+
+
+    bind_res = bind(sockfd, (struct sockaddr*)&sock, sizeof(sock));
     if (bind_res < 0) {
-        perror("Error on bind\n");
+        perror("Error en bind");
+        close(sockfd);
+        exit(1);
+    }
+    printf("Socket successfully binded...\n");
+
+
+    listen_res = listen(sockfd, MAX_CLIENTES);
+    if (listen_res < 0) {
+        perror("Error en listen");
         close(sockfd);
         exit(1);
     }
 
-    printf("Server successfully binded...\n");
-
-    listen_res = listen (sockfd,1);
-    if (listen_res < 0) {
-        perror ("Error on listen");
-        exit(1);
-    }
     printf("Server listening...\n");
 
-    socklen_t addrlen = sizeof(out_sock);
-    conn_sock = accept(sockfd, (struct sockaddr *) &out_sock, &addrlen);
-    close(sockfd);
-    if(conn_sock < 0){
-        perror ("Error on accept");
-        exit(1);
-    }
+    
+
+    socklen_t addrlen = sizeof(client_addr);
+
 
     while (end == 0) {
-        conv_res = start_receiving (conn_sock, size, buffer);
-        if (conv_res < 0) {
-            perror ("Error on receiving");
-            exit(1);
+        if (num_threads >= MAX_CLIENTES) {
+            break;
         }
 
-        conv_res = start_sending (conn_sock, buffer,size);
-        if (conv_res < 0) {
-            perror ("Error on sending");
-            exit(1);
-        }          
+        int *conn_sock = malloc(sizeof(int));
+        *conn_sock = accept(sockfd, (struct sockaddr*)&client_addr, &addrlen);
+        if (*conn_sock < 0) {
+            if(end == 1) {
+                break;
+            }
+            perror("Error on accept");
+            free(conn_sock);
+            continue;
+        }
+
+        if (pthread_create(&threads[num_threads], NULL, thread_client, conn_sock) != 0) {
+            perror("Error on pthread");
+            free(conn_sock);
+            continue;
+        }
+        num_threads++;
+
+    }
+    
+
+    close(sockfd);
+
+    for (int i = 0; i < num_threads; i++) {
+        pthread_join(threads[i], NULL);
     }
 
-    close(conn_sock);    
     printf("\nServidor detenido con Ctrl+C\n");
-    exit(0);
-
+    return 0;
 }

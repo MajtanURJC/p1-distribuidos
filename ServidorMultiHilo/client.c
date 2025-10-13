@@ -6,46 +6,32 @@
 #include <sys/socket.h>
 #include <signal.h>
 
-#define PORT 8080
 #define BUF_SIZE 1024
-
-int end = 0;
-
-int start_receiving (int conn_sock, ssize_t size, char buffer[]) {
-    size = recv(conn_sock, buffer, 1024 - 1, 0);  // tamaño fijo del buffer
-    if (size < 0 ) 
-        return -1;
-    buffer[size] = '\0';  
-    printf("+++ %s", buffer);
-    return 0;
-}
-
-int start_sending (int conn_sock, char buffer[], ssize_t size) {
-    memset(buffer, 0, 1024);
-    printf("> ");
-    fgets(buffer, BUF_SIZE, stdin);
-    size = send(conn_sock, buffer, strlen(buffer), 0);
-    if (size < 0) 
-        return -1;
-    return 0;
-}
-
-void signal_control (int out_signal) {
-    end = 1;
-}
 
 int main (int argc, char* argv[]) {
 
-    signal(SIGINT, signal_control); 
-    char buffer[1024];
-    ssize_t size = 0;
-    int conv_res;
+    if(argc != 4) {
+        perror("Se requieren tres parametros");
+        exit(1);
+    }
+
+    ssize_t size = -1;
     int sockfd;
-    
     struct sockaddr_in sock;
+    char buffer[BUF_SIZE]; 
+
+    char *endptr;
+    long valor = strtol(argv[3], &endptr, 10);
+    if (*endptr != '\0') {
+        fprintf(stderr, "Puerto inválido: %s\n", argv[3]);
+        exit(1);
+    }
+
+    unsigned short puerto_host = (unsigned short) valor;
+
     sock.sin_family = AF_INET;
-    sock.sin_addr.s_addr = inet_addr("127.0.0.1");
-    sock.sin_port = htons(PORT);
+    sock.sin_addr.s_addr = inet_addr(argv[2]);  
+    sock.sin_port = htons(puerto_host);
 
     sockfd = socket(sock.sin_family, SOCK_STREAM, 0);
 
@@ -61,24 +47,30 @@ int main (int argc, char* argv[]) {
         exit(1);
     }
 
-    while (end == 0) {
+    
 
-        conv_res = start_sending(sockfd, buffer, size);
-        if (conv_res < 0) {
-            perror("Error on sending");
-            exit(1);
-        }
+    const char *envio = "Hello server! From client: ";
 
-        conv_res = start_receiving(sockfd, size, buffer);
-        if (conv_res < 0) {
-            perror("Error on receiving");
-            exit(1);
-        }
+    strcpy(buffer, envio);
+    strcat(buffer, argv[1]);
+    strcat(buffer, "\n");
+
+    size = send(sockfd, buffer, strlen(buffer), 0);
+    if (size < 0) {
+        perror("Error on send");
+        close(sockfd);
+        exit(1);
     }
+
+    size = recv(sockfd, buffer, BUF_SIZE - 1, 0);
+    if (size < 0) {
+        perror ("Error on receiving");
+        close(sockfd);
+        exit(1);
+    }
+    buffer[size] = '\0';  
+    printf ("+++ %s", buffer);
    
     close(sockfd);    
-    printf("\nServidor detenido con Ctrl+C\n");
     exit(0);   
-
- }
-
+}
