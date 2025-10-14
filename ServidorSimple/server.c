@@ -1,3 +1,8 @@
+/*
+  Simple TCP Server
+  Sistemas Distribuidos y Concurrentes
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -9,24 +14,23 @@
 #define PORT 8080
 #define BUF_SIZE 1024
 
-int end = 0;
+int end_flag = 0;
 
-
-void signal_control (int out_signal) {
-    end = 1;
+void signal_control(int out_signal) {
+    end_flag = 1;
 }
 
-int main (int argc, char* argv[]) {
-
-    signal (SIGINT, signal_control);
+int main(int argc, char *argv[]) {
+    signal(SIGINT, signal_control);
     setbuf(stdout, NULL);
+
     int sockfd;
     int bind_res;
     int listen_res;
     int conn_sock;
     char buffer[BUF_SIZE];
     ssize_t size = -1;
-    
+
     struct sockaddr_in sock;
     sock.sin_family = AF_INET;
     sock.sin_addr.s_addr = INADDR_ANY;
@@ -34,69 +38,73 @@ int main (int argc, char* argv[]) {
 
     struct sockaddr out_sock;
 
-    sockfd = socket (sock.sin_family,SOCK_STREAM,0);
-
+    sockfd = socket(sock.sin_family, SOCK_STREAM, 0);
     if (sockfd < 0) {
-        perror ("Error creating the socket\n");
+        perror("Error creating the socket");
         exit(1);
-    } 
-    printf ("Socket successfully created...\n");
+    }
 
-    bind_res = bind(sockfd, (struct sockaddr *) &sock, sizeof(sock));
+    printf("Socket successfully created...\n");
+
+    bind_res = bind(sockfd, (struct sockaddr *)&sock, sizeof(sock));
     if (bind_res < 0) {
-        perror("Error on bind\n");
+        perror("Error on bind");
         close(sockfd);
         exit(1);
     }
 
     printf("Server successfully binded...\n");
 
-    listen_res = listen (sockfd,1);
+    listen_res = listen(sockfd, 1);
     if (listen_res < 0) {
-        perror ("Error on listen");
+        perror("Error on listen");
+        close(sockfd);
         exit(1);
     }
+
     printf("Server listening...\n");
 
     socklen_t addrlen = sizeof(out_sock);
-    conn_sock = accept(sockfd, (struct sockaddr *) &out_sock, &addrlen);
+    conn_sock = accept(sockfd, (struct sockaddr *)&out_sock, &addrlen);
     close(sockfd);
-    if(conn_sock < 0){
-        perror ("Error on accept");
+
+    if (conn_sock < 0) {
+        perror("Error on accept");
         exit(1);
     }
 
     while (1) {
         size = recv(conn_sock, buffer, BUF_SIZE - 1, 0);
         if (size < 0) {
-            perror ("Error on receiving");
+            perror("Error on receiving");
             close(conn_sock);
             exit(1);
         }
-        buffer[size] = '\0';  
-        printf ("+++ %s", buffer);
-        
-        if(end == 1) {
+
+        buffer[size] = '\0';
+        printf("+++ %s", buffer);
+
+        if (end_flag == 1) {
             break;
         }
 
         memset(buffer, 0, BUF_SIZE);
         printf("> ");
         fgets(buffer, BUF_SIZE, stdin);
-        size = send(conn_sock,buffer,strlen(buffer),0);
+
+        size = send(conn_sock, buffer, strlen(buffer), 0);
         if (size < 0) {
             perror("Error on send");
             close(conn_sock);
             exit(1);
         }
-          
-        if(end == 1) {
+
+        if (end_flag == 1) {
             break;
         }
     }
 
-    close(conn_sock);    
+    close(conn_sock);
     printf("\nServer stopped with Ctrl+C\n");
     exit(0);
-
 }
